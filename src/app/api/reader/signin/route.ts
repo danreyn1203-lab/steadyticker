@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     });
     res.cookies.set(
       READER_PENDING_COOKIE,
-      createPendingToken(auth.reader.id),
+      await createPendingToken(auth.reader.id),
       pendingCookieOptions(),
     );
     return res;
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     needsVerification: false,
     firstName: auth.reader.firstName,
   });
-  res.cookies.set(READER_COOKIE, createReaderToken(auth.reader.id), readerCookieOptions());
+  res.cookies.set(READER_COOKIE, await createReaderToken(auth.reader.id), readerCookieOptions());
   return res;
 }
 

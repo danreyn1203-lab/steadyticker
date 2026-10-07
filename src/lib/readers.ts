@@ -1,24 +1,22 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
 import {
   randomUUID,
-  randomBytes,
-  randomInt,
-  timingSafeEqual,
-  createHmac,
-  scrypt as _scrypt,
-} from "crypto";
-import { promisify } from "util";
+  randomHex,
+  randomIntBelow,
+  constantTimeEqual,
+  hmacSha256Hex,
+  pbkdf2Hex,
+} from "@/lib/crypto";
+import { readDoc, writeDoc } from "@/lib/kv";
 import { addSubscriber, removeSubscriber, isValidEmail } from "@/lib/subscribers";
 
 /**
  * Reader accounts — the people who sign up on the public site.
  *
  * An account is a first name, an email, and a password. Passwords are hashed
- * with scrypt (a per-account random salt) and only the hash is stored — never
- * the password itself. The store is local JSON for now; moving it to a real
- * database later only touches this file.
+ * with PBKDF2 (a per-account random salt) and only the hash is stored — never
+ * the password itself. The store is a JSON document via src/lib/kv.ts — a
+ * Cloudflare KV namespace in production, a local JSON file in development.
  *
  * Email ownership is proved with a short code: a new account is created
  * UNVERIFIED and is only subscribed and allowed to sign in once the code that
@@ -31,13 +29,11 @@ import { addSubscriber, removeSubscriber, isValidEmail } from "@/lib/subscribers
  * roles).
  */
 
-const scrypt = promisify(_scrypt);
-
 export interface Reader {
   id: string;
   firstName: string;
   email: string;
-  /** scrypt hash (hex) of the password + passwordSalt. */
+  /** PBKDF2 hash (hex) of the password + passwordSalt. */
   passwordHash: string;
   /** Random per-account salt (hex). */
   passwordSalt: string;
@@ -66,29 +62,23 @@ export interface PublicReader {
   verified: boolean;
 }
 
-const FILE = path.join(process.cwd(), "src", "content", "readers.json");
-
 /** Codes are 6 digits and live for 15 minutes; 5 wrong tries burns a code. */
 const CODE_TTL_MS = 15 * 60 * 1000;
 const MAX_VERIFY_ATTEMPTS = 5;
 const MIN_PASSWORD = 8;
-const MAX_PASSWORD = 200; // bound scrypt work — don't hash arbitrarily long input
+const MAX_PASSWORD = 200; // bound the hashing work — don't hash arbitrarily long input
 
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
 export async function getReaders(): Promise<Reader[]> {
-  try {
-    const data = JSON.parse(await fs.readFile(FILE, "utf8"));
-    return Array.isArray(data.readers) ? data.readers : [];
-  } catch {
-    return [];
-  }
+  const data = await readDoc<{ readers?: Reader[] }>("readers", {});
+  return Array.isArray(data.readers) ? data.readers : [];
 }
 
 async function writeReaders(readers: Reader[]): Promise<void> {
-  await fs.writeFile(FILE, JSON.stringify({ readers }, null, 2), "utf8");
+  await writeDoc("readers", { readers });
 }
 
 export function toPublic(r: Reader): PublicReader {
@@ -144,40 +134,38 @@ export function passwordProblem(password: string): string | null {
 // ---------------------------------------------------------------------------
 
 async function hashPassword(password: string, salt: string): Promise<string> {
-  const buf = (await scrypt(password, salt, 64)) as Buffer;
-  return buf.toString("hex");
+  return pbkdf2Hex(password, salt);
 }
 
 async function passwordMatches(reader: Reader, password: string): Promise<boolean> {
   if (!reader.passwordHash || !reader.passwordSalt) return false;
-  let candidate: Buffer;
+  let candidate: string;
   try {
-    candidate = (await scrypt(password, reader.passwordSalt, 64)) as Buffer;
+    candidate = await pbkdf2Hex(password, reader.passwordSalt);
   } catch {
     return false;
   }
-  const stored = Buffer.from(reader.passwordHash, "hex");
-  return stored.length === candidate.length && timingSafeEqual(stored, candidate);
+  return constantTimeEqual(reader.passwordHash, candidate);
 }
 
 function generateCode(): string {
-  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+  return String(randomIntBelow(1_000_000)).padStart(6, "0");
 }
 
 /** HMAC the code with the server secret so a leaked store isn't trivially reversible. */
-function codeHash(readerId: string, code: string): string {
+function codeHash(readerId: string, code: string): Promise<string> {
   const secret =
     process.env.AUTHOR_SESSION_SECRET || "dev-insecure-secret-change-me";
-  return createHmac("sha256", `${secret}|reader-verify-v1`)
-    .update(`${readerId}:${code}`)
-    .digest("hex");
+  return hmacSha256Hex(`${secret}|reader-verify-v1`, `${readerId}:${code}`);
 }
 
-function freshCode(readerId: string): { code: string; hash: string; expires: number } {
+async function freshCode(
+  readerId: string,
+): Promise<{ code: string; hash: string; expires: number }> {
   const code = generateCode();
   return {
     code,
-    hash: codeHash(readerId, code),
+    hash: await codeHash(readerId, code),
     expires: Date.now() + CODE_TTL_MS,
   };
 }
@@ -236,7 +224,7 @@ export async function createReaderAccount({
     };
   }
 
-  const salt = randomBytes(16).toString("hex");
+  const salt = randomHex(16);
   const passwordHash = await hashPassword(password, salt);
 
   if (existing) {
@@ -244,7 +232,7 @@ export async function createReaderAccount({
     existing.firstName = firstName;
     existing.passwordHash = passwordHash;
     existing.passwordSalt = salt;
-    const { code, hash, expires } = freshCode(existing.id);
+    const { code, hash, expires } = await freshCode(existing.id);
     existing.verifyCodeHash = hash;
     existing.verifyExpires = expires;
     existing.verifyAttempts = 0;
@@ -253,7 +241,7 @@ export async function createReaderAccount({
   }
 
   const id = randomUUID();
-  const { code, hash, expires } = freshCode(id);
+  const { code, hash, expires } = await freshCode(id);
   const reader: Reader = {
     id,
     firstName,
@@ -279,7 +267,7 @@ export async function stageVerificationCode(
   const readers = await getReaders();
   const reader = readers.find((r) => r.id === readerId);
   if (!reader) return { ok: false };
-  const { code, hash, expires } = freshCode(reader.id);
+  const { code, hash, expires } = await freshCode(reader.id);
   reader.verifyCodeHash = hash;
   reader.verifyExpires = expires;
   reader.verifyAttempts = 0;
@@ -321,9 +309,7 @@ export async function checkVerificationCode(
     return { ok: false, error: "Too many tries. Ask for a new code." };
   }
 
-  const expected = Buffer.from(reader.verifyCodeHash, "hex");
-  const got = Buffer.from(codeHash(reader.id, code), "hex");
-  const good = expected.length === got.length && timingSafeEqual(expected, got);
+  const good = constantTimeEqual(reader.verifyCodeHash, await codeHash(reader.id, code));
 
   if (!good) {
     reader.verifyAttempts = (reader.verifyAttempts ?? 0) + 1;

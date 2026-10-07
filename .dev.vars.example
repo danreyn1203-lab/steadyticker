@@ -1,0 +1,11 @@
+# Local secrets for `npm run cf:preview` (the Workers runtime, via wrangler).
+# Copy to .dev.vars and fill in. `.dev.vars` is git-ignored.
+# (Plain `next dev` reads .env.local instead — this file is only for the
+#  Cloudflare preview/deploy path.)
+AUTHOR_EMAIL=
+AUTHOR_PASSWORD=
+AUTHOR_SESSION_SECRET=
+RESEND_API_KEY=
+NEWSLETTER_FROM=
+NEXT_PUBLIC_SITE_URL=
+CRON_SECRET=

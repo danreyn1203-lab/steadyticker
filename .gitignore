@@ -51,3 +51,13 @@ next-env.d.ts
 
 # Claude Code local tooling (launch config, local settings)
 .claude/
+
+# Cloudflare / OpenNext build output and local state
+/.open-next/
+/.wrangler/
+.dev.vars
+# generated worker types
+/worker-configuration.d.ts
+
+# generated content registry (rebuilt by predev/prebuild)
+/src/content/articles/registry.generated.ts

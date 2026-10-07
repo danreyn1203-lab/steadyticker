@@ -32,6 +32,6 @@ export async function POST(request: Request) {
   }
 
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE, createToken(), sessionCookieOptions());
+  res.cookies.set(SESSION_COOKIE, await createToken(), sessionCookieOptions());
   return res;
 }

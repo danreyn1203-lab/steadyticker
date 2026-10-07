@@ -1,6 +1,11 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { createHmac, timingSafeEqual } from "crypto";
+import {
+  hmacSha256B64url,
+  b64urlEncode,
+  b64urlDecodeToString,
+  constantTimeEqual,
+} from "@/lib/crypto";
 
 /**
  * Minimal single-author auth. There is one author (the site owner). The
@@ -8,6 +13,10 @@ import { createHmac, timingSafeEqual } from "crypto";
  * hard-code secrets (§67). A signed, httpOnly cookie marks an authenticated
  * session; the secret never reaches the client. This is enough to gate editing
  * on a single-author research site; it is not a multi-user account system.
+ *
+ * Signing uses Web Crypto HMAC-SHA256 (see src/lib/crypto.ts) so it runs on
+ * Cloudflare Workers as well as locally; the signature is byte-identical to the
+ * old node:crypto version, so existing sessions keep working.
  *
  * To change the login, edit AUTHOR_EMAIL / AUTHOR_PASSWORD in .env.local and
  * restart the server — the credentials live only there, never in the code.
@@ -24,38 +33,25 @@ function secret(): string {
   );
 }
 
-function b64url(input: Buffer | string): string {
-  return Buffer.from(input)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-function sign(payload: string): string {
-  return b64url(createHmac("sha256", secret()).update(payload).digest());
+function sign(payload: string): Promise<string> {
+  return hmacSha256B64url(secret(), payload);
 }
 
 /** Create a signed session token that expires in MAX_AGE seconds. */
-export function createToken(): string {
-  const payload = b64url(
+export async function createToken(): Promise<string> {
+  const payload = b64urlEncode(
     JSON.stringify({ role: "author", exp: Date.now() + MAX_AGE * 1000 }),
   );
-  return `${payload}.${sign(payload)}`;
+  return `${payload}.${await sign(payload)}`;
 }
 
-function verifyToken(token: string | undefined): boolean {
+async function verifyToken(token: string | undefined): Promise<boolean> {
   if (!token) return false;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return false;
-  const expected = sign(payload);
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
+  if (!constantTimeEqual(sig, await sign(payload))) return false;
   try {
-    const data = JSON.parse(
-      Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(),
-    );
+    const data = JSON.parse(b64urlDecodeToString(payload));
     return data.role === "author" && typeof data.exp === "number" && data.exp > Date.now();
   } catch {
     return false;
@@ -72,9 +68,7 @@ export async function isAuthor(): Promise<boolean> {
 export function checkPassword(input: string): boolean {
   const expected = process.env.AUTHOR_PASSWORD;
   if (!expected) return false; // no password configured → editing stays locked
-  const a = Buffer.from(input);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  return constantTimeEqual(input, expected);
 }
 
 /**

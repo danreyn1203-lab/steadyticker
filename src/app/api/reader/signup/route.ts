@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   });
   res.cookies.set(
     READER_PENDING_COOKIE,
-    createPendingToken(result.reader.id),
+    await createPendingToken(result.reader.id),
     pendingCookieOptions(),
   );
   return res;

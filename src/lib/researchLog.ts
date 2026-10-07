@@ -1,6 +1,7 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
+import researchLogFallback from "@/content/research-log.json";
 
 export interface ResearchedCompany {
   ticker: string;
@@ -50,9 +51,10 @@ export interface ResearchLog {
 const FILE = path.join(process.cwd(), "src", "content", "research-log.json");
 
 export async function getResearchLog(): Promise<ResearchLog | null> {
+  // Filesystem first (fresh local edits), static import as the Workers fallback.
   try {
     return JSON.parse(await fs.readFile(FILE, "utf8")) as ResearchLog;
   } catch {
-    return null;
+    return (researchLogFallback as ResearchLog) ?? null;
   }
 }

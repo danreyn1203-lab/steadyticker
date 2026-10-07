@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
+import { constantTimeEqual } from "@/lib/crypto";
 import { isAuthor } from "@/lib/auth";
 import { TRACKED_TICKERS } from "@/lib/holdings";
 import { getFeatured } from "@/lib/articles/featured";
@@ -51,7 +51,5 @@ export async function GET(request: Request) {
 }
 
 function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+  return constantTimeEqual(a, b);
 }

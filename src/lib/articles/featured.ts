@@ -1,6 +1,8 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
+import featuredFallback from "@/content/featured.json";
+import { isReadOnlyRuntime } from "@/lib/kv";
 
 /**
  * "This week's closest look" — a single editable spotlight shown on the
@@ -34,14 +36,20 @@ export interface Featured {
 const FILE = path.join(process.cwd(), "src", "content", "featured.json");
 
 export async function getFeatured(): Promise<Featured | null> {
+  // Filesystem first (fresh local edits), static import as the Workers fallback.
   try {
     return JSON.parse(await fs.readFile(FILE, "utf8")) as Featured;
   } catch {
-    return null;
+    return (featuredFallback as Featured) ?? null;
   }
 }
 
 export async function saveFeatured(data: Featured): Promise<void> {
+  if (isReadOnlyRuntime()) {
+    throw new Error(
+      "Editing is only available locally (npm run dev); the published site is read-only.",
+    );
+  }
   if (!data.ticker || !data.name || !data.whyWatching) {
     throw new Error("Featured spotlight needs at least a ticker, name and thesis.");
   }

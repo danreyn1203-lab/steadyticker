@@ -1,13 +1,13 @@
 import "server-only";
-import { promises as fs } from "fs";
-import path from "path";
-import { randomUUID } from "crypto";
+import { randomUUID } from "@/lib/crypto";
+import { readDoc, writeDoc } from "@/lib/kv";
 
 /**
- * Email subscription store + broadcast history. Local JSON (no external DB).
- * Subscribers are captured from the public form; broadcasts are composed and
- * sent from the author dashboard. Actual sending uses an email provider when
- * configured (see src/lib/email.ts) — this file only stores data.
+ * Email subscription store + broadcast history. Stored as JSON documents via
+ * src/lib/kv.ts — a Cloudflare KV namespace in production, local JSON files in
+ * development. Subscribers are captured from the public form; broadcasts are
+ * composed and sent from the author dashboard. Actual sending uses an email
+ * provider when configured (see src/lib/email.ts) — this file only stores data.
  */
 
 export interface Subscriber {
@@ -24,9 +24,6 @@ export interface Broadcast {
   via: string; // "resend" | "mailto" | "none"
 }
 
-const SUBS = path.join(process.cwd(), "src", "content", "subscribers.json");
-const CASTS = path.join(process.cwd(), "src", "content", "broadcasts.json");
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isValidEmail(email: string): boolean {
@@ -34,16 +31,12 @@ export function isValidEmail(email: string): boolean {
 }
 
 export async function getSubscribers(): Promise<Subscriber[]> {
-  try {
-    const data = JSON.parse(await fs.readFile(SUBS, "utf8"));
-    return Array.isArray(data.subscribers) ? data.subscribers : [];
-  } catch {
-    return [];
-  }
+  const data = await readDoc<{ subscribers?: Subscriber[] }>("subscribers", {});
+  return Array.isArray(data.subscribers) ? data.subscribers : [];
 }
 
 async function writeSubscribers(subs: Subscriber[]): Promise<void> {
-  await fs.writeFile(SUBS, JSON.stringify({ subscribers: subs }, null, 2), "utf8");
+  await writeDoc("subscribers", { subscribers: subs });
 }
 
 export async function addSubscriber(
@@ -65,12 +58,8 @@ export async function removeSubscriber(emailRaw: string): Promise<void> {
 }
 
 export async function getBroadcasts(): Promise<Broadcast[]> {
-  try {
-    const data = JSON.parse(await fs.readFile(CASTS, "utf8"));
-    return Array.isArray(data.broadcasts) ? data.broadcasts : [];
-  } catch {
-    return [];
-  }
+  const data = await readDoc<{ broadcasts?: Broadcast[] }>("broadcasts", {});
+  return Array.isArray(data.broadcasts) ? data.broadcasts : [];
 }
 
 export async function addBroadcast(
@@ -79,10 +68,6 @@ export async function addBroadcast(
   const broadcasts = await getBroadcasts();
   const entry: Broadcast = { ...b, id: randomUUID(), sentAt: new Date().toISOString() };
   broadcasts.unshift(entry);
-  await fs.writeFile(
-    CASTS,
-    JSON.stringify({ broadcasts: broadcasts.slice(0, 100) }, null, 2),
-    "utf8",
-  );
+  await writeDoc("broadcasts", { broadcasts: broadcasts.slice(0, 100) });
   return entry;
 }

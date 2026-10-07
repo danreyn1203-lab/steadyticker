@@ -1,6 +1,11 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { createHmac, timingSafeEqual } from "crypto";
+import {
+  hmacSha256B64url,
+  b64urlEncode,
+  b64urlDecodeToString,
+  constantTimeEqual,
+} from "@/lib/crypto";
 import { findReaderById, type Reader } from "@/lib/readers";
 
 /**
@@ -17,6 +22,9 @@ import { findReaderById, type Reader } from "@/lib/readers";
  * real credential: holding it means you proved the password and the emailed
  * code. A separate short-lived PENDING cookie carries someone through the
  * verification step before they have a full session.
+ *
+ * Signing uses Web Crypto HMAC-SHA256 (src/lib/crypto.ts) so it runs on
+ * Cloudflare Workers; signatures are byte-identical to the old node:crypto code.
  */
 
 export const READER_COOKIE = "reader_session";
@@ -35,16 +43,8 @@ function key(): string {
   return `${base}|reader-session-v1`;
 }
 
-function b64url(input: Buffer | string): string {
-  return Buffer.from(input)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-function sign(payload: string): string {
-  return b64url(createHmac("sha256", key()).update(payload).digest());
+function sign(payload: string): Promise<string> {
+  return hmacSha256B64url(key(), payload);
 }
 
 function pendingKey(): string {
@@ -53,28 +53,24 @@ function pendingKey(): string {
   return `${base}|reader-pending-v1`;
 }
 
-function signPending(payload: string): string {
-  return b64url(createHmac("sha256", pendingKey()).update(payload).digest());
+function signPending(payload: string): Promise<string> {
+  return hmacSha256B64url(pendingKey(), payload);
 }
 
-export function createReaderToken(readerId: string): string {
-  const payload = b64url(
+export async function createReaderToken(readerId: string): Promise<string> {
+  const payload = b64urlEncode(
     JSON.stringify({ role: "reader", id: readerId, exp: Date.now() + MAX_AGE * 1000 }),
   );
-  return `${payload}.${sign(payload)}`;
+  return `${payload}.${await sign(payload)}`;
 }
 
-function readerIdFromToken(token: string | undefined): string | null {
+async function readerIdFromToken(token: string | undefined): Promise<string | null> {
   if (!token) return null;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
-  const a = Buffer.from(sig);
-  const b = Buffer.from(sign(payload));
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  if (!constantTimeEqual(sig, await sign(payload))) return null;
   try {
-    const data = JSON.parse(
-      Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(),
-    );
+    const data = JSON.parse(b64urlDecodeToString(payload));
     if (data.role !== "reader") return null;
     if (typeof data.exp !== "number" || data.exp <= Date.now()) return null;
     return typeof data.id === "string" ? data.id : null;
@@ -89,7 +85,7 @@ function readerIdFromToken(token: string | undefined): string | null {
  */
 export async function getReader(): Promise<Reader | null> {
   const store = await cookies();
-  const id = readerIdFromToken(store.get(READER_COOKIE)?.value);
+  const id = await readerIdFromToken(store.get(READER_COOKIE)?.value);
   if (!id) return null;
   return findReaderById(id);
 }
@@ -106,28 +102,24 @@ export function readerCookieOptions() {
 
 // --- pending verification -------------------------------------------------
 
-export function createPendingToken(readerId: string): string {
-  const payload = b64url(
+export async function createPendingToken(readerId: string): Promise<string> {
+  const payload = b64urlEncode(
     JSON.stringify({
       role: "reader-pending",
       id: readerId,
       exp: Date.now() + PENDING_MAX_AGE * 1000,
     }),
   );
-  return `${payload}.${signPending(payload)}`;
+  return `${payload}.${await signPending(payload)}`;
 }
 
-function pendingIdFromToken(token: string | undefined): string | null {
+async function pendingIdFromToken(token: string | undefined): Promise<string | null> {
   if (!token) return null;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
-  const a = Buffer.from(sig);
-  const b = Buffer.from(signPending(payload));
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  if (!constantTimeEqual(sig, await signPending(payload))) return null;
   try {
-    const data = JSON.parse(
-      Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(),
-    );
+    const data = JSON.parse(b64urlDecodeToString(payload));
     if (data.role !== "reader-pending") return null;
     if (typeof data.exp !== "number" || data.exp <= Date.now()) return null;
     return typeof data.id === "string" ? data.id : null;
@@ -139,7 +131,7 @@ function pendingIdFromToken(token: string | undefined): string | null {
 /** The reader currently mid-verification (from the pending cookie), or null. */
 export async function getPendingReader(): Promise<Reader | null> {
   const store = await cookies();
-  const id = pendingIdFromToken(store.get(READER_PENDING_COOKIE)?.value);
+  const id = await pendingIdFromToken(store.get(READER_PENDING_COOKIE)?.value);
   if (!id) return null;
   return findReaderById(id);
 }

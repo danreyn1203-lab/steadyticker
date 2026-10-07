@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   }
 
   const res = NextResponse.json({ ok: true, firstName: result.reader.firstName });
-  res.cookies.set(READER_COOKIE, createReaderToken(result.reader.id), readerCookieOptions());
+  res.cookies.set(READER_COOKIE, await createReaderToken(result.reader.id), readerCookieOptions());
   res.cookies.set(READER_PENDING_COOKIE, "", { path: "/", maxAge: 0 });
   return res;
 }
