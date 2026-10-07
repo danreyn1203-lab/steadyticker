@@ -21,7 +21,7 @@ export interface Broadcast {
   subject: string;
   body: string;
   recipients: number;
-  via: string; // "smtp" | "mailto" | "none"
+  via: string; // "resend" | "mailto" | "none"
 }
 
 const SUBS = path.join(process.cwd(), "src", "content", "subscribers.json");

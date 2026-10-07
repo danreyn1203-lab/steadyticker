@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 /**
  * Enter the 6-digit code that was emailed. The account to verify is held in a
  * server-side pending cookie, so this form only needs the code. (In local dev
- * without SMTP the code is printed to the server console by the API.)
+ * without an email provider the code is printed to the server console by the API.)
  */
 export function VerifyForm({ email }: { email: string }) {
   const router = useRouter();

@@ -3,7 +3,7 @@ import { isAuthor } from "@/lib/auth";
 import { emailConfigured, renderEmailHtml, sendToAll } from "@/lib/email";
 import { site } from "@/lib/site";
 
-/** Author-only: send a single test email to confirm SMTP works. */
+/** Author-only: send a single test email to confirm email delivery works. */
 export async function POST(request: Request) {
   if (!(await isAuthor())) {
     return NextResponse.json({ ok: false, error: "Not authorized" }, { status: 401 });
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error:
-          "SMTP isn’t configured. Add SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / NEWSLETTER_FROM to .env.local and restart.",
+          "Email isn’t configured. Add RESEND_API_KEY and NEWSLETTER_FROM to .env.local and restart.",
       },
       { status: 400 },
     );
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
 
   const html = renderEmailHtml(
     `Test email from ${site.name}`,
-    "This is a test. If you’re reading this, your SMTP settings work and you can send real newsletters. 🎉",
+    "This is a test. If you’re reading this, email delivery works and you can send real newsletters. 🎉",
   );
   const { sent, errors } = await sendToAll([to], `Test — ${site.name}`, html);
 

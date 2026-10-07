@@ -31,7 +31,7 @@ export default async function AdminEmailPage() {
         Subscribers &amp; email
       </h1>
       <p className="mt-2 text-sm text-ink-soft">
-        Send one message to everyone at once. Sending uses your own SMTP account
+        Send one message to everyone at once. Sending uses your own Resend account
         (set in <code className="rounded bg-surface-sunken px-1">.env.local</code>).
         If it isn’t configured, you’ll get a ready-to-send email in your mail app
         instead.

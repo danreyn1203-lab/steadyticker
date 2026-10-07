@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "No subscribers yet." }, { status: 400 });
   }
 
-  // No SMTP configured → hand back a mailto BCC the author can send from their client.
+  // No email provider configured → hand back a mailto BCC the author can send from their client.
   if (!emailConfigured()) {
     await addBroadcast({
       subject,
@@ -50,18 +50,18 @@ export async function POST(request: Request) {
       recipients: emails.length,
       mailto: buildMailtoBcc(emails, subject, body),
       message:
-        "SMTP isn’t configured yet, so I prepared a ready-to-send email in your mail app (everyone BCC’d).",
+        "Email isn’t configured yet, so I prepared a ready-to-send email in your mail app (everyone BCC’d).",
     });
   }
 
-  // SMTP configured → send one personal email per subscriber.
+  // Resend configured → send one personal email per subscriber.
   const html = renderEmailHtml(subject, body);
   const { sent, failed, errors } = await sendToAll(emails, subject, html);
-  await addBroadcast({ subject, body, recipients: emails.length, via: "smtp" });
+  await addBroadcast({ subject, body, recipients: emails.length, via: "resend" });
 
   return NextResponse.json({
     ok: true,
-    via: "smtp",
+    via: "resend",
     recipients: emails.length,
     sent,
     failed,

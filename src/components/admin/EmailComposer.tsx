@@ -78,7 +78,7 @@ export function EmailComposer({
       });
       const data: SendResult = await res.json();
       setResult(data);
-      if (data.ok && data.via === "smtp") router.refresh();
+      if (data.ok && data.via === "resend") router.refresh();
     } catch {
       setResult({ ok: false, error: "Network error. Try again." });
     } finally {
@@ -106,8 +106,8 @@ export function EmailComposer({
           </p>
           <p className="text-xs text-ink-muted">
             {configured
-              ? "SMTP is configured — messages send from your account."
-              : "SMTP not configured — you’ll get a mailto fallback to send from your mail app."}
+              ? "Resend is configured — messages send from your verified domain."
+              : "Email not configured — you’ll get a mailto fallback to send from your mail app."}
           </p>
         </div>
         <span
@@ -116,7 +116,7 @@ export function EmailComposer({
             configured ? "bg-pos-soft text-pos" : "bg-warn-soft text-warn",
           )}
         >
-          {configured ? "SMTP ready" : "Fallback mode"}
+          {configured ? "Resend ready" : "Fallback mode"}
         </span>
       </div>
 
@@ -124,7 +124,7 @@ export function EmailComposer({
       <div className="rounded-lg border border-line bg-surface p-4">
         <p className="text-sm font-medium text-ink">Send a test to yourself</p>
         <p className="text-xs text-ink-muted">
-          Confirm your SMTP settings work before emailing everyone.
+          Confirm your email settings work before emailing everyone.
         </p>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <input

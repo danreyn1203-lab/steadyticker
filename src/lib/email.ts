@@ -1,34 +1,74 @@
 import "server-only";
-import nodemailer from "nodemailer";
 import { renderParagraphs } from "./markdown";
 import { site } from "./site";
 
 /**
- * Email sending over SMTP with Nodemailer — no third-party email SaaS.
- * Credentials come from environment variables (never hard-coded):
- *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, NEWSLETTER_FROM
- * If those aren't set, sending is disabled and the admin UI offers a
- * mailto BCC fallback instead. Sending is only ever triggered by the author
+ * Email sending over Resend's HTTP API — a single `fetch` POST, no SMTP and no
+ * SDK, so the exact same code runs locally (`npm run dev`) and on Cloudflare
+ * Workers (which cannot open SMTP sockets). Credentials come from environment
+ * variables, never hard-coded:
+ *   RESEND_API_KEY  — from https://resend.com/api-keys
+ *   NEWSLETTER_FROM — a verified sender, e.g. "QuietTicker <hello@your-domain>"
+ *                     (use "onboarding@resend.dev" to test before a domain is
+ *                     verified — Resend only delivers that to your own address)
+ * If either is unset, sending is disabled: the newsletter offers a mailto BCC
+ * fallback and verification codes print to the server console (see
+ * readerDelivery.ts). Newsletter sends are only ever triggered by the author
  * from /admin.
  */
 
+const RESEND_ENDPOINT = "https://api.resend.com/emails";
+
 export function emailConfigured(): boolean {
-  return Boolean(
-    process.env.SMTP_HOST &&
-      process.env.SMTP_USER &&
-      process.env.SMTP_PASS &&
-      process.env.NEWSLETTER_FROM,
-  );
+  return Boolean(process.env.RESEND_API_KEY && process.env.NEWSLETTER_FROM);
 }
 
-function transport() {
-  const port = Number(process.env.SMTP_PORT || 587);
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port,
-    secure: port === 465, // 465 = implicit TLS; 587 = STARTTLS
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  });
+/**
+ * Post a single message to Resend. Never throws — returns ok:false with a
+ * human-readable reason so every caller can degrade gracefully.
+ */
+async function resendSend(msg: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const key = process.env.RESEND_API_KEY;
+  const from = process.env.NEWSLETTER_FROM;
+  if (!key || !from) return { ok: false, error: "Email not configured" };
+  try {
+    const res = await fetch(RESEND_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: msg.to,
+        subject: msg.subject,
+        html: msg.html,
+      }),
+    });
+    if (!res.ok) {
+      // Resend returns { name, message } on error; surface the message.
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { message?: string };
+        if (body?.message) detail = body.message;
+      } catch {
+        /* non-JSON body — keep the status code */
+      }
+      return { ok: false, error: detail };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "send failed" };
+  }
+}
+
+/** Small pause so a batch of sends stays under Resend's rate limit. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 /** Wrap the author's markdown body in a simple, readable HTML email. */
@@ -53,29 +93,35 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Send one personal email per recipient. Returns per-message tallies. */
+/**
+ * Send one personal email per recipient (each gets their own `to`, never a
+ * shared thread). Returns per-recipient tallies. Sent sequentially with a small
+ * pause to respect Resend's default 2-requests/second limit; the newsletter
+ * runs from the author's local machine, so this is never on a Worker's clock.
+ */
 export async function sendToAll(
   recipients: string[],
   subject: string,
   html: string,
 ): Promise<{ sent: number; failed: number; errors: string[] }> {
-  const t = transport();
   let sent = 0;
   let failed = 0;
   const errors: string[] = [];
-  for (const to of recipients) {
-    try {
-      await t.sendMail({ from: process.env.NEWSLETTER_FROM, to, subject, html });
+  for (let i = 0; i < recipients.length; i++) {
+    const to = recipients[i];
+    const res = await resendSend({ to, subject, html });
+    if (res.ok) {
       sent++;
-    } catch (e) {
+    } else {
       failed++;
-      errors.push(`${to}: ${e instanceof Error ? e.message : "failed"}`);
+      errors.push(`${to}: ${res.error ?? "failed"}`);
     }
+    if (i < recipients.length - 1) await sleep(600);
   }
   return { sent, failed, errors };
 }
 
-/** Fallback for when SMTP isn't configured: a mailto link that BCCs everyone. */
+/** Fallback for when email isn't configured: a mailto link that BCCs everyone. */
 export function buildMailtoBcc(
   recipients: string[],
   subject: string,
@@ -109,25 +155,19 @@ export function renderVerificationHtml(firstName: string, code: string): string 
 }
 
 /**
- * Email a single verification code over SMTP. Mirrors the newsletter sender —
- * Nodemailer, no third-party SaaS. Returns ok:false (never throws) so the
- * caller can fall back to logging the code in development.
+ * Email a single verification code via Resend. Mirrors the newsletter sender.
+ * Returns ok:false (never throws) so the caller can fall back to logging the
+ * code in development.
  */
 export async function sendVerificationCode(
   to: string,
   firstName: string,
   code: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!emailConfigured()) return { ok: false, error: "SMTP not configured" };
-  try {
-    await transport().sendMail({
-      from: process.env.NEWSLETTER_FROM,
-      to,
-      subject: `Your ${site.name} verification code: ${code}`,
-      html: renderVerificationHtml(firstName, code),
-    });
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "send failed" };
-  }
+  if (!emailConfigured()) return { ok: false, error: "Email not configured" };
+  return resendSend({
+    to,
+    subject: `Your ${site.name} verification code: ${code}`,
+    html: renderVerificationHtml(firstName, code),
+  });
 }
