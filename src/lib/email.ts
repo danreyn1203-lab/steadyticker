@@ -8,7 +8,7 @@ import { site } from "./site";
  * Workers (which cannot open SMTP sockets). Credentials come from environment
  * variables, never hard-coded:
  *   RESEND_API_KEY  — from https://resend.com/api-keys
- *   NEWSLETTER_FROM — a verified sender, e.g. "QuietTicker <hello@your-domain>"
+ *   NEWSLETTER_FROM — a verified sender, e.g. "SteadyTicker <hello@your-domain>"
  *                     (use "onboarding@resend.dev" to test before a domain is
  *                     verified — Resend only delivers that to your own address)
  * If either is unset, sending is disabled: the newsletter offers a mailto BCC

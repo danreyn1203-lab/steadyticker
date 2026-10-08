@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { site } from "@/lib/site";
 
 // A branded tab icon so the first thing in someone's browser is the mark, not a
-// framework default. Same "Q" tile as the header wordmark and the OG image.
+// framework default. Same "S" tile as the header wordmark and the OG image.
 export const size = { width: 32, height: 32 };
 export const contentType = "image/png";
 

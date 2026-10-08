@@ -1,4 +1,4 @@
-# QuietTicker
+# SteadyTicker
 
 Independent stock research, published in the open.
 

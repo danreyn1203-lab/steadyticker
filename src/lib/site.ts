@@ -4,7 +4,7 @@
  */
 
 export const site = {
-  name: "QuietTicker",
+  name: "SteadyTicker",
   tagline: "Independent research, in the open.",
   description:
     "Independent, transparent research on companies with interesting growth opportunities, unusual competitive advantages, and potentially overlooked fundamentals.",
@@ -12,7 +12,7 @@ export const site = {
   /** Global "sample data" banner. Off now that the site runs on real research. */
   demo: false,
   /** Public base URL — drives canonical links, sitemap, and Open Graph. */
-  url: process.env.NEXT_PUBLIC_SITE_URL || "https://quietticker.com",
+  url: process.env.NEXT_PUBLIC_SITE_URL || "https://steadyticker.com",
 } as const;
 
 export interface NavItem {

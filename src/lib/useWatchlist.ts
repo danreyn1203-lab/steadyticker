@@ -8,7 +8,7 @@ import { useCallback, useSyncExternalStore } from "react";
  * (toggling on a stock page updates an open watchlist page live).
  */
 
-const KEY = "quietticker:watchlist";
+const KEY = "steadyticker:watchlist";
 const EMPTY: readonly string[] = [];
 
 let cache: readonly string[] = EMPTY;

@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // Worker name → also the *.workers.dev subdomain. Changes together with the
   // brand/repo rename (see site.name). Rename here when the final name is set.
-  "name": "quietticker",
+  "name": "steadyticker",
   "main": ".open-next/worker.js",
   // nodejs_compat is required by the OpenNext adapter; the date must be recent
   // enough to enable it (>= 2024-09-23).
