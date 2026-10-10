@@ -8,6 +8,15 @@
   // enough to enable it (>= 2024-09-23).
   "compatibility_date": "2026-10-06",
   "compatibility_flags": ["nodejs_compat"],
+  // Not a secret — a mailto address is visible in the page source to any
+  // visitor regardless. Next.js reads this at BUILD time (NEXT_PUBLIC_* vars
+  // get inlined into the bundle during `next build`, not read live from the
+  // Worker's runtime env), so this only reaches the footer's Advertise link
+  // if Cloudflare's Build pipeline exposes "vars" to the build step itself —
+  // confirmed by the smoke test after this deploy.
+  "vars": {
+    "NEXT_PUBLIC_ADVERTISE_EMAIL": "danreyn1203@gmail.com"
+  },
   "assets": {
     "binding": "ASSETS",
     "directory": ".open-next/assets"
