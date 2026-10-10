@@ -1,11 +1,12 @@
 import { getAllArticles } from "@/lib/articles/store";
+import { isAuthor } from "@/lib/auth";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { ArticleCard } from "@/components/article/ArticleCard";
 import { Button } from "@/components/ui/Button";
 import { ArrowRight } from "@/components/ui/icons";
 
 export async function LatestNotes() {
-  const articles = await getAllArticles();
+  const [articles, author] = await Promise.all([getAllArticles(), isAuthor()]);
   if (articles.length === 0) return null;
 
   return (
@@ -23,7 +24,7 @@ export async function LatestNotes() {
       />
       <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {articles.slice(0, 3).map((a) => (
-          <ArticleCard key={a.slug} article={a} />
+          <ArticleCard key={a.slug} article={a} editable={author} />
         ))}
       </div>
     </section>

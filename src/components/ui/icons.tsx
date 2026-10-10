@@ -116,3 +116,11 @@ export function Dot(p: P) {
     </svg>
   );
 }
+
+export function Pencil(p: P) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M11 2.5l2.5 2.5-8 8-3 .5.5-3 8-8z" />
+    </svg>
+  );
+}

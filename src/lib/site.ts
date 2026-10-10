@@ -13,6 +13,15 @@ export const site = {
   demo: false,
   /** Public base URL — drives canonical links, sitemap, and Open Graph. */
   url: process.env.NEXT_PUBLIC_SITE_URL || "https://steadyticker.com",
+  /**
+   * Where the footer "Advertise" link drafts an email to. Not a secret — a
+   * mailto address is visible in the page source to any visitor anyway — but
+   * it's an env var rather than hard-coded so it's one line to set per
+   * environment. The link only renders once this is non-empty (see
+   * SiteFooter), so an unset value just hides the feature rather than
+   * pointing at nothing.
+   */
+  advertiseEmail: process.env.NEXT_PUBLIC_ADVERTISE_EMAIL || "",
 } as const;
 
 export interface NavItem {

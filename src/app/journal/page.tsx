@@ -49,7 +49,7 @@ export default async function JournalPage() {
       ) : (
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {articles.map((a) => (
-            <ArticleCard key={a.slug} article={a} />
+            <ArticleCard key={a.slug} article={a} editable={author} />
           ))}
         </div>
       )}

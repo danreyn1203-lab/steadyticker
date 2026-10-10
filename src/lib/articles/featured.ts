@@ -16,7 +16,7 @@ export interface Featured {
   exchange: string;
   sector: string;
   industry: string;
-  /** Fallback price, shown only when Yahoo Finance can't price `ticker` live. */
+  /** Fallback price, shown only when the live quote sources (src/lib/quotes.ts) can't price `ticker`. */
   price: number;
   currency?: string;
   /** Fallback price note, shown with the fallback price. */

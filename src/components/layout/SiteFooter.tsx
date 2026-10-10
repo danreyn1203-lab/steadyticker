@@ -11,6 +11,23 @@ const sourceCategories = [
   "Industry sources",
 ];
 
+/** A mailto: link with a ready-made subject + body — no account or send on our end. */
+function advertiseMailto(): string {
+  const subject = `Advertising on ${site.name}`;
+  const body = [
+    `Hi ${site.author},`,
+    "",
+    "I'm interested in advertising on your site. Here are the details:",
+    "",
+    "Company/brand:",
+    "What you'd like to advertise:",
+    "Budget / timeframe:",
+    "",
+    "Thanks!",
+  ].join("\n");
+  return `mailto:${site.advertiseEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 export function SiteFooter() {
   return (
     <footer className="mt-24 border-t border-line bg-surface">
@@ -51,6 +68,16 @@ export function SiteFooter() {
                   </Link>
                 </li>
               ))}
+              {site.advertiseEmail && (
+                <li>
+                  <a
+                    href={advertiseMailto()}
+                    className="text-ink-soft transition-colors hover:text-ink"
+                  >
+                    Advertise
+                  </a>
+                </li>
+              )}
             </ul>
           </div>
 

@@ -46,8 +46,9 @@ next-env.d.ts
 /src/content/broadcasts.json
 /src/content/readers.json
 
-# generated price cache (refetched from Yahoo Finance on demand)
+# generated price caches (CNBC/Nasdaq, refetched on demand — see src/lib/quotes.ts)
 /src/content/quote-cache.json
+/src/content/price-history-cache.json
 
 # Claude Code local tooling (launch config, local settings)
 .claude/
